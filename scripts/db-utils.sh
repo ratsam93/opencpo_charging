@@ -14,7 +14,8 @@ set -euo pipefail
 : "${PG_PORT:=5432}"
 : "${PG_USER:=ocpp}"
 : "${PG_NAME:=ocpp}"
-: "${PG_PASSWORD:=ocpp}"
+# PG_PASSWORD falls back to POSTGRES_PASSWORD (what .env / configure.py write);
+# there is deliberately no hardcoded default password.
 : "${BACKUP_DIR:=/app/backups}"
 : "${RETENTION_COUNT:=5}"
 
@@ -38,7 +39,7 @@ load_env() {
 
 # ── PGPASSWORD helper ──
 _pg_env() {
-  echo "PGPASSWORD=${PG_PASSWORD}"
+  echo "PGPASSWORD=${PG_PASSWORD:-${POSTGRES_PASSWORD:-}}"
 }
 
 # ── Create a custom-format dump of the database ──
@@ -61,7 +62,7 @@ db_backup() {
 
   echo "[db-utils] Backing up database ${PG_NAME}@${PG_HOST}:${PG_PORT} → ${output_path}"
 
-  PGPASSWORD="${PG_PASSWORD}" pg_dump \
+  PGPASSWORD="${PG_PASSWORD:-${POSTGRES_PASSWORD:-}}" pg_dump \
     -h "$PG_HOST" \
     -p "$PG_PORT" \
     -U "$PG_USER" \
@@ -93,7 +94,7 @@ db_restore() {
 
   echo "[db-utils] Restoring database ${PG_NAME}@${PG_HOST}:${PG_PORT} from ${backup_file}"
 
-  PGPASSWORD="${PG_PASSWORD}" pg_restore \
+  PGPASSWORD="${PG_PASSWORD:-${POSTGRES_PASSWORD:-}}" pg_restore \
     -h "$PG_HOST" \
     -p "$PG_PORT" \
     -U "$PG_USER" \
@@ -132,6 +133,7 @@ run_migrations() {
   fi
 
   # Set DB connection string for Alembic (respect existing env if set)
+  PG_PASSWORD="${PG_PASSWORD:-${POSTGRES_PASSWORD:-}}"
   export PG_HOST PG_PORT PG_USER PG_NAME PG_PASSWORD
 
   local alembic_dir

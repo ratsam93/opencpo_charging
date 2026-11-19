@@ -611,7 +611,7 @@ if docker compose ps ocpp-core 2>/dev/null | grep -q "(healthy)"; then
     export PG_PORT=5432
     export PG_NAME='${POSTGRES_DB:-ocpp}'
     export PG_USER='${POSTGRES_USER:-ocpp}'
-    export PG_PASSWORD='${POSTGRES_PASSWORD:-ocpp}'
+    export PG_PASSWORD='${POSTGRES_PASSWORD}'
     cd /app 2>/dev/null || cd /app/opencpo 2>/dev/null || true
     alembic upgrade head 2>&1
   "; then
