@@ -123,7 +123,9 @@ services:
 
   compliance-tester:
     build: ./opencpo-tester
-    restart: unless-stopped
+    # The tester exits after 60 s with no charger connected; do not restart-loop it.
+    # Run it on demand:  docker compose run --rm --service-ports compliance-tester
+    restart: "no"
     ports:
       - "${COMPLIANCE_PORT:-8090}:8090"
     # The tester is a CLI + WebSocket listener: chargers connect TO it on this

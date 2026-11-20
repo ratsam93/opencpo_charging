@@ -374,7 +374,7 @@ def show_summary(config, env_path):
     print(color("│", CYAN) + f"  {color('─' * 53, DIM)}".ljust(55) + color("│", CYAN))
     print(color("│", CYAN) + f"  {color('Org:', DIM)} {config['org_name']}".ljust(55) + color("│", CYAN))
     print(color("│", CYAN) + f"  {color('URL:', DIM)} {config['public_url']}".ljust(55) + color("│", CYAN))
-    print(color("│", CYAN) + f"  {color('Key:', DIM)} {config['secret_key'][:16]}...".ljust(55) + color("│", CYAN))
+    print(color("│", CYAN) + f"  {color('Secrets:', DIM)} written to .env (not shown)".ljust(55) + color("│", CYAN))
     print(color("│", CYAN) + f"  {color('Setup:', DIM)} Create admin account on first visit at http://localhost:{config['admin_port']}".ljust(55) + color("│", CYAN))
 
     print(color("╰" + "─" * 56 + "╯", CYAN))
