@@ -460,7 +460,7 @@ if [ "$BACKUP_DONE" = false ]; then
       PG_HOST_DIRECT="localhost"
     fi
 
-    if PGPASSWORD="${POSTGRES_PASSWORD:-ocpp}" pg_dump \
+    if PGPASSWORD="${POSTGRES_PASSWORD:-}" pg_dump \
       -h "$PG_HOST_DIRECT" \
       -p "$PG_PORT_DIRECT" \
       -U "${POSTGRES_USER:-ocpp}" \
@@ -611,7 +611,7 @@ if docker compose ps ocpp-core 2>/dev/null | grep -q "(healthy)"; then
     export PG_PORT=5432
     export PG_NAME='${POSTGRES_DB:-ocpp}'
     export PG_USER='${POSTGRES_USER:-ocpp}'
-    export PG_PASSWORD='${POSTGRES_PASSWORD:-ocpp}'
+    export PG_PASSWORD='${POSTGRES_PASSWORD}'
     cd /app 2>/dev/null || cd /app/opencpo 2>/dev/null || true
     alembic upgrade head 2>&1
   "; then

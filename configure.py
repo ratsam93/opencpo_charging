@@ -258,6 +258,7 @@ def gather_config():
     section("Core CSMS")
 
     config["secret_key"] = ask("Secret key (leave blank to generate)", generate_secret())
+    config["management_api_key"] = generate_secret(48)
     config["log_level"] = ask("Log level", "INFO")
     config["ocpp16_port"] = ask("OCPP 1.6 WebSocket port", "9100")
     config["ocpp201_port"] = ask("OCPP 2.0.1 WebSocket port", "9201")
@@ -297,6 +298,7 @@ REDIS_PORT={config["redis_port"]}
 
 # ── Core CSMS (ocpp-core) ──────────────────────────────────────────────────
 SECRET_KEY={config["secret_key"]}
+MANAGEMENT_API_KEY={config["management_api_key"]}
 LOG_LEVEL={config["log_level"]}
 OCPP_16_WS_PORT={config["ocpp16_port"]}
 OCPP_201_WS_PORT={config["ocpp201_port"]}
@@ -322,11 +324,24 @@ CHARGER_FARM_PORT={config["charger_farm_port"]}
         print(color(f"  Existing .env backed up to .env.bak", DIM))
         print(color(f"  Stale docker volumes (pgdata) may need removal if passwords changed", YELLOW))
 
-    # Escape any remaining $ as $$ for docker-compose interpolation safety
-    content = content.replace("$", "$$")
+    # Single-quote every value: docker compose and bash `source .env` both treat
+    # single-quoted text literally, so spaces (e.g. ORG_NAME=My CPO), $ and #
+    # round-trip identically. A literal single quote cannot be represented in
+    # both parsers, so it is dropped.
+    quoted = []
+    for line in content.splitlines():
+        if line and not line.startswith("#") and "=" in line:
+            key, _, val = line.partition("=")
+            val = val.replace("'", "")
+            line = f"{key}='{val}'"
+        quoted.append(line)
+    content = "\n".join(quoted) + "\n"
 
     with open(env_path, "w") as f:
         f.write(content)
+    os.chmod(env_path, 0o600)  # secrets: owner read/write only
+    if os.path.exists(env_path + ".bak"):
+        os.chmod(env_path + ".bak", 0o600)
 
     return env_path
 
@@ -424,6 +439,7 @@ def _defaults():
         "db_port": "5432",
         "redis_port": "6379",
         "secret_key": generate_secret(),
+        "management_api_key": generate_secret(),
         "log_level": "INFO",
         "ocpp16_port": "9100",
         "ocpp201_port": "9201",

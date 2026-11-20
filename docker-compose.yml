@@ -8,9 +8,9 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-ocpp}
       POSTGRES_USER: ${POSTGRES_USER:-ocpp}
-      POSTGRES_PASSWORD: ${PG_PASSWORD:-CHANGE_ME_IN_PROD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set - run configure.py or edit .env}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -23,7 +23,7 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -50,15 +50,17 @@ services:
       PG_PORT: 5432
       PG_NAME: ${POSTGRES_DB:-ocpp}
       PG_USER: ${POSTGRES_USER:-ocpp}
-      PG_PASSWORD: ${PG_PASSWORD:-CHANGE_ME_IN_PROD}
+      PG_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set - run configure.py or edit .env}
       # Redis
       REDIS_HOST: redis
       REDIS_PORT: 6379
       # App
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
-      MANAGEMENT_API_KEY: ${MANAGEMENT_API_KEY:-CHANGE_ME_IN_PROD}
-      API_KEY: ${MANAGEMENT_API_KEY:-CHANGE_ME_IN_PROD}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is not set - run configure.py or edit .env}
+      # opencpo-core reads JWT_SECRET (not SECRET_KEY) for account tokens
+      JWT_SECRET: ${SECRET_KEY:?SECRET_KEY is not set - run configure.py or edit .env}
+      MANAGEMENT_API_KEY: ${MANAGEMENT_API_KEY:?MANAGEMENT_API_KEY is not set - run configure.py or edit .env}
+      API_KEY: ${MANAGEMENT_API_KEY:?MANAGEMENT_API_KEY is not set - run configure.py or edit .env}
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost}
       # Backup / update paths
       UPDATE_SCRIPT: /app/opencpo/update.sh
@@ -88,8 +90,9 @@ services:
       - "${CPO_ADMIN_PORT:-8080}:8080"
     environment:
       OCPP_CORE_API: http://ocpp-core:8000
-      CORE_API_KEY: ${MANAGEMENT_API_KEY:-CHANGE_ME_IN_PROD}
-      JWT_SECRET: ${MANAGEMENT_API_KEY:-CHANGE_ME_IN_PROD}
+      CORE_API_KEY: ${MANAGEMENT_API_KEY:?MANAGEMENT_API_KEY is not set - run configure.py or edit .env}
+      # Core signs admin JWTs with API_KEY, so this must equal MANAGEMENT_API_KEY
+      JWT_SECRET: ${MANAGEMENT_API_KEY:?MANAGEMENT_API_KEY is not set - run configure.py or edit .env}
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost}
       ORG_NAME: ${ORG_NAME:-My CPO}
     healthcheck:
@@ -113,6 +116,8 @@ services:
       OCPP_CORE_API: http://ocpp-core:8000
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost}
       SKIN: ${SKIN:-default}
+      MANAGEMENT_API_KEY: ${MANAGEMENT_API_KEY:?MANAGEMENT_API_KEY is not set - run configure.py or edit .env}
+      JWT_SECRET: ${SECRET_KEY:?SECRET_KEY is not set - run configure.py or edit .env}
 
   # ── Compliance Tester ─────────────────────────────────────────────────────
 
@@ -121,8 +126,10 @@ services:
     restart: unless-stopped
     ports:
       - "${COMPLIANCE_PORT:-8090}:8090"
+    # The tester is a CLI + WebSocket listener: chargers connect TO it on this
+    # port. It does not dial out to ocpp-core and has no web UI.
     environment:
-      DEFAULT_WS_URL: ws://ocpp-core:9100
+      PORT: 8090
 
   # ── Virtual Charger Farm ──────────────────────────────────────────────────
 
