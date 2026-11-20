@@ -324,8 +324,18 @@ CHARGER_FARM_PORT={config["charger_farm_port"]}
         print(color(f"  Existing .env backed up to .env.bak", DIM))
         print(color(f"  Stale docker volumes (pgdata) may need removal if passwords changed", YELLOW))
 
-    # Escape any remaining $ as $$ for docker-compose interpolation safety
-    content = content.replace("$", "$$")
+    # Single-quote every value: docker compose and bash `source .env` both treat
+    # single-quoted text literally, so spaces (e.g. ORG_NAME=My CPO), $ and #
+    # round-trip identically. A literal single quote cannot be represented in
+    # both parsers, so it is dropped.
+    quoted = []
+    for line in content.splitlines():
+        if line and not line.startswith("#") and "=" in line:
+            key, _, val = line.partition("=")
+            val = val.replace("'", "")
+            line = f"{key}='{val}'"
+        quoted.append(line)
+    content = "\n".join(quoted) + "\n"
 
     with open(env_path, "w") as f:
         f.write(content)

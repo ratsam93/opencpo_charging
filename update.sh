@@ -460,7 +460,7 @@ if [ "$BACKUP_DONE" = false ]; then
       PG_HOST_DIRECT="localhost"
     fi
 
-    if PGPASSWORD="${POSTGRES_PASSWORD:-ocpp}" pg_dump \
+    if PGPASSWORD="${POSTGRES_PASSWORD:-}" pg_dump \
       -h "$PG_HOST_DIRECT" \
       -p "$PG_PORT_DIRECT" \
       -U "${POSTGRES_USER:-ocpp}" \
