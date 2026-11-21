@@ -46,7 +46,11 @@ docker compose config -q && docker compose up -d --build
 rm -f .deploy/repos.conf                         # use the built-in single-repo default
 rm .deploy/PAUSE
 ```
-Check `docker compose ps` and `scripts/deploy.sh --status` afterwards. The component folders now come from this
+Check `docker compose ps` and `scripts/deploy.sh --status` afterwards.
+
+Core now requires the management key on its admin, charger, session and event routes and signs-checks its payment
+webhook. The admin and charge app send the key, so deploy them together (one push does). For an existing `.env`, add a
+webhook secret once: `echo "PAYMENT_WEBHOOK_SECRET='$(openssl rand -hex 32)'" >> .env` (see `opencpo-core/docs/payments.md`). The component folders now come from this
 repository; the `pki-data` volume (certificate authority) is not affected.
 
 ## Public access: two layouts

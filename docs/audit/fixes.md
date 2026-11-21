@@ -9,7 +9,8 @@ that Claude can push to. P0 = fix before exposing anything to the internet.
 | 2 | P0 | orchestrator | Quote `.env` values; remove `ocpp` password fallback in `update.sh` | **done** |
 | 2b | P0 | orchestrator | Safe compose defaults: loopback-only ports (`BIND_ADDR`), no Docker socket / repo mount in core (opt-in `docker-compose.updater.yml`); `configure.py` no longer echoes generated secrets in prompts; `scripts/load-schema.sh` for the manual schema load; `scripts/deploy.sh` pull-based auto-deploy with rollback | **done** |
 | 2c | P0 | orchestrator | `pki-data` volume so the certificate authority survives container recreation (found by the live test) | **done** |
-| 3 | P0 | core | Require `management_auth` on admin update/backup/setup, chargers, sessions, events, webhooks; restrict CORS origins | todo |
+| 3 | P0 | core | Require `management_auth` on admin update/backup/setup, chargers, sessions, events, webhooks; restrict CORS origins | **done** (management key on chargers/sessions/events, admin update/backup/setup writes, public session read/stop/cancel; verified live) |
+| 3b | P0 | core | Payment webhook: HMAC-signed (or management key), 5 min replay window, provider statuses only; `postgresql-client` in the image so backups work | **done** (webhook verified live; image rebuild not possible in the sandbox) |
 | 4 | P0 | core | Authenticate chargers: require mTLS or per-charger credentials; refuse plain `ws://` unless explicitly allowed | todo |
 | 5 | P0 | charge-app | Ignore `X-Client-Cert-Serial` unless `TRUST_CLIENT_CERT_HEADER` is set | **done on branch** `claude/audit-fixes` (not merged) |
 | 6 | P0 | charge-app | Session routes require the owner's cookie/token; stop sending the management key for anonymous calls; do not return raw errors | **done on branch** `claude/audit-fixes` (not merged) |

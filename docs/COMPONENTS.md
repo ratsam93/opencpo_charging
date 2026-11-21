@@ -5,7 +5,7 @@ Everything lives in this one repository. Each component is a folder with its own
 
 | Folder | What it is | Compose service | Origin |
 |---|---|---|---|
-| `opencpo-core/` | OCPP 1.6 / 2.0.1 CSMS, REST API, PKI | `ocpp-core` | upstream `opencpo/opencpo-core` @ `b2d5ee8` (**unmodified so far; see `docs/audit/live-test.md`**) |
+| `opencpo-core/` | OCPP 1.6 / 2.0.1 CSMS, REST API, PKI | `ocpp-core` | upstream `opencpo/opencpo-core` @ `b2d5ee8`, **now modified here** (authentication, payment webhook; see `docs/audit/live-test.md`) |
 | `opencpo-admin/` | operator dashboard | `cpo-admin` | fork `opencpo-admin_charger` @ `96a92c4` |
 | `opencpo-charge-app/` | driver PWA | `charge-app` | fork `opencpo-charge-app` @ `bac950d` |
 | `opencpo-charger-farm/` | virtual charger simulator | `charger-farm` | fork `opencpo-charger-farm` @ `b8fb3f2` |
@@ -28,6 +28,6 @@ cd opencpo-charger-farm && pip install -r requirements-dev.txt && pytest    # fa
 cd opencpo-bastion && pip install -r requirements.txt pytest pytest-asyncio && pytest   # bastion (48)
 scripts/test-deploy.sh                                                      # deploy script (40)
 ```
-Core has no test suite upstream yet.
+cd opencpo-core && pip install -r requirements-dev.txt && pytest            # core (107, no database needed)
 
 Audited commits and findings: [audit/README.md](audit/README.md), [audit/live-test.md](audit/live-test.md).

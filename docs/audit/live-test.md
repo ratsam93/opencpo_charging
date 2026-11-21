@@ -30,7 +30,16 @@ were not available.
 | farm | Scenarios never cleaned up chargers; reusing an id with another OCPP version silently kept the old charger | fixed, verified live |
 | tester | `--timeout` ignored; errored tests printed "All tests passed" with exit 0; StartTransaction answered twice | fixed, verified live |
 
-## Still open: opencpo-core (not forked; edit in the monorepo)
+## Core: fixed after this test (verified on the live stack)
+- Chargers, sessions, events, admin update/backup/setup writes and public session read/stop/cancel now need the
+  management key (every route that answered anonymously in the live matrix returns 401; `GET /admin/setup/status` stays public).
+- Payment webhook needs an HMAC signature or the management key; verified live: unsigned, wrong, stale and forged-status calls
+  refused, a valid signature marks the session paid. The admin setup wizard (fresh database, all 8 steps), admin pages, the live
+  event stream and the driver flow still work.
+- Not yet fixed from the list below: items 2, 4-10.
+
+## Still open: opencpo-core
+(item 1 and the unauthenticated part of 3 are fixed, see above)
 Ranked by impact; all confirmed LIVE unless noted.
 1. **Payment webhook `/api/payments/webhook` has no signature check**: anyone can mark a session paid and trigger a charge.
 2. **OCPP 2.0.1 stores almost nothing**: timestamps are passed to asyncpg as strings (`ocpp201/handler.py` ~176-184, `transaction.py`, `meter.py`); also only 1 of ~60 messages reaches `ocpp_messages`; server commands (Reset, GetVariables...) fail with "not connected" for 2.0.1 chargers.

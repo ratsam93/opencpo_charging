@@ -61,6 +61,8 @@ services:
       JWT_SECRET: ${SECRET_KEY:?SECRET_KEY is not set - run configure.py or edit .env}
       MANAGEMENT_API_KEY: ${MANAGEMENT_API_KEY:?MANAGEMENT_API_KEY is not set - run configure.py or edit .env}
       API_KEY: ${MANAGEMENT_API_KEY:?MANAGEMENT_API_KEY is not set - run configure.py or edit .env}
+      # HMAC secret payment adapters use to sign POST /api/payments/webhook (empty = only the management key works)
+      PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET:-}
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost}
       # Backup / update paths
       UPDATE_SCRIPT: /app/opencpo/update.sh
