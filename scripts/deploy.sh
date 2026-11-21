@@ -21,8 +21,9 @@
 # Repo list: built-in defaults below, or override with .deploy/repos.conf,
 # one line per repo:   dir|git-url|branch|services
 #   dir       folder relative to the install dir ("." = this orchestrator repo)
-#   services  space-separated compose services to rebuild, or * = all
-#             (for "." the stack is only touched when docker-compose*.yml changes)
+#   services  space-separated compose services to rebuild, or
+#             *     = the whole stack, only when docker-compose*.yml / .env.example changed
+#             auto  = single-repo mode: decide from the changed folders (see service_for_path)
 
 set -uo pipefail
 
@@ -43,14 +44,11 @@ done
 
 mkdir -p "$STATE_DIR"
 
-# ── Default repos (forks). opencpo-core is deliberately NOT auto-deployed from
-# upstream: add it to .deploy/repos.conf once you have your own fork.
+# ── Default: this repository contains every component (single-repo layout).
+# Change the branch to "main" once the work is merged. For several separate
+# repos, list them in .deploy/repos.conf instead (see the header).
 DEFAULT_REPOS=(
-  ".|https://github.com/ratsam93/opencpo_charging.git|claude/great-newton-0flk8g|*"
-  "opencpo-admin|https://github.com/ratsam93/opencpo-admin_charger.git|claude/audit-fixes|cpo-admin"
-  "opencpo-charge-app|https://github.com/ratsam93/opencpo-charge-app.git|claude/audit-fixes|charge-app"
-  "opencpo-tester|https://github.com/ratsam93/opencpo-tester.git|claude/audit-fixes|compliance-tester"
-  "opencpo-charger-farm|https://github.com/ratsam93/opencpo-charger-farm.git|claude/audit-fixes|charger-farm"
+  ".|https://github.com/ratsam93/opencpo_charging.git|claude/great-newton-0flk8g|auto"
 )
 
 log() {
@@ -91,6 +89,30 @@ load_repos() {
   else
     REPOS=("${DEFAULT_REPOS[@]}")
   fi
+}
+
+# ── Which compose service does a changed file belong to? ──────────────────
+service_for_path() {  # prints a service name, "*" (whole stack) or nothing
+  case "$1" in
+    docker-compose*.yml|docker-compose*.yaml|.env.example) echo "*" ;;
+    opencpo-core/*)         echo ocpp-core ;;
+    opencpo-admin/*)        echo cpo-admin ;;
+    opencpo-charge-app/*)   echo charge-app ;;
+    opencpo-tester/*)       echo compliance-tester ;;
+    opencpo-charger-farm/*) echo charger-farm ;;
+    *) ;;                   # docs, scripts, bastion (not in compose), ...
+  esac
+}
+
+services_for_changes() {  # path-to-checkout old-sha new-sha  -> space separated services or "*"
+  local path="$1" old="$2" new="$3" f s out=() seen=" "
+  while IFS= read -r f; do
+    s="$(service_for_path "$f")"
+    [ -n "$s" ] || continue
+    if [ "$s" = "*" ]; then echo "*"; return; fi
+    case "$seen" in *" $s "*) ;; *) out+=("$s"); seen="$seen$s " ;; esac
+  done < <(git -C "$path" diff --name-only "$old" "$new" 2>/dev/null)
+  echo "${out[*]:-}"
 }
 
 # ── Health checks ─────────────────────────────────────────────────────────
@@ -195,7 +217,14 @@ for entry in "${REPOS[@]}"; do
 
   # Which services need a rebuild?
   svcs="$services"
-  if [ "$services" = "*" ]; then
+  if [ "$services" = "auto" ]; then
+    svcs="$(services_for_changes "$path" "$local_sha" "$new_sha")"
+    if [ -z "$svcs" ]; then
+      log "INFO $dir: no service folders changed, stack not touched"
+      continue
+    fi
+    log "INFO $dir: changed services: $svcs"
+  elif [ "$services" = "*" ]; then
     if git -C "$path" diff --name-only "$local_sha" "$new_sha" 2>/dev/null | grep -qE '^(docker-compose[^/]*\.ya?ml|\.env\.example)$'; then
       svcs="*"
     else

@@ -16,20 +16,38 @@ memory, pause, dirty tree, self-update, lock). It has **not** yet run against a 
 
 ## What it watches
 
-Built-in defaults (edit with `.deploy/repos.conf`, one `dir|git-url|branch|services` line per repo):
+This repository is the only repo to watch: the script follows one branch of `opencpo_charging`
+(built-in default: `claude/great-newton-0flk8g`; change the branch in `.deploy/repos.conf` or in
+`DEFAULT_REPOS` to `main` once the work is merged). In `auto` mode it looks at **which folders changed**
+and rebuilds only those services:
 
-| Folder | Repo | Branch | Rebuilds |
-|---|---|---|---|
-| `.` (this repo) | ratsam93/opencpo_charging | `claude/great-newton-0flk8g` | whole stack, only if `docker-compose*.yml` / `.env.example` changed |
-| `opencpo-admin` | ratsam93/opencpo-admin_charger | `claude/audit-fixes` | `cpo-admin` |
-| `opencpo-charge-app` | ratsam93/opencpo-charge-app | `claude/audit-fixes` | `charge-app` |
-| `opencpo-tester` | ratsam93/opencpo-tester | `claude/audit-fixes` | `compliance-tester` (build only) |
-| `opencpo-charger-farm` | ratsam93/opencpo-charger-farm | `claude/audit-fixes` | `charger-farm` |
+| Changed path | Rebuilds |
+|---|---|
+| `opencpo-core/` | `ocpp-core` |
+| `opencpo-admin/` | `cpo-admin` |
+| `opencpo-charge-app/` | `charge-app` |
+| `opencpo-charger-farm/` | `charger-farm` |
+| `opencpo-tester/` | `compliance-tester` (build only) |
+| `docker-compose*.yml`, `.env.example` | the whole stack (`up -d`) |
+| `docs/`, `scripts/`, `deploy/`, `opencpo-bastion/`, anything else | nothing (pulled only) |
 
-`opencpo-core` is **not** auto-deployed by default because the only copy is the upstream
-project. Once you have your own fork, add a line to `.deploy/repos.conf`:
-`opencpo-core|https://github.com/<you>/opencpo-core.git|<branch>|ocpp-core`
-(a `repos.conf` replaces the defaults, so copy the other lines into it too).
+Separate repos are still supported: list them in `.deploy/repos.conf` (`dir|git-url|branch|services`).
+
+## Moving a server from the old separate repos to the single repo (once)
+
+Run as the `opencpo` user in `~/opencpo_charging`. Your `.env`, `docker-compose.override.yml` and `edge/` are untouched.
+```bash
+scripts/deploy.sh --status                       # note what is deployed now
+touch .deploy/PAUSE                              # stop auto-deploy while migrating
+git fetch origin claude/great-newton-0flk8g
+rm -rf opencpo-core opencpo-admin opencpo-charge-app opencpo-tester opencpo-charger-farm   # old clones, no local changes
+git checkout -B claude/great-newton-0flk8g origin/claude/great-newton-0flk8g
+docker compose config -q && docker compose up -d --build
+rm -f .deploy/repos.conf                         # use the built-in single-repo default
+rm .deploy/PAUSE
+```
+Check `docker compose ps` and `scripts/deploy.sh --status` afterwards. The component folders now come from this
+repository; the `pki-data` volume (certificate authority) is not affected.
 
 ## Public access: two layouts
 

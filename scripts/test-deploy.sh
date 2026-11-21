@@ -138,4 +138,42 @@ rmlogs; push_admin v7; "$D"; rc=$?
 check "locked run exits 0 without deploying" "[ $rc = 0 ] && [ -z \"\$(dlog)\" ]"
 wait
 
+
+echo "14. single-repo mode (services=auto): which folder changed decides what is rebuilt"
+git init -q --bare -b main "$T/remotes/mono.git"
+git clone -q "$T/remotes/mono.git" "$T/work/mono" 2>/dev/null
+( cd "$T/work/mono" && git checkout -q -b main && mkdir -p scripts opencpo-core opencpo-admin opencpo-charge-app opencpo-tester opencpo-charger-farm opencpo-bastion docs \
+  && cp "$SRC/scripts/deploy.sh" scripts/ && for d in opencpo-core opencpo-admin opencpo-charge-app opencpo-tester opencpo-charger-farm opencpo-bastion docs; do echo v1 > "$d/f"; done \
+  && echo 'services: {}' > docker-compose.yml && git add . && git commit -q -m v1 && git push -q origin main )
+git clone -q "$T/remotes/mono.git" "$T/install2" 2>&1 | grep -v "^$"
+printf "OCPP_API_PORT='8000'\nCPO_ADMIN_PORT='8080'\n" > "$T/install2/.env"; mkdir -p "$T/install2/.deploy"
+echo ".|file://$T/remotes/mono.git|main|auto" > "$T/install2/.deploy/repos.conf"
+D2="$T/install2/scripts/deploy.sh"
+push_mono() { ( cd "$T/work/mono" && for f in "$@"; do echo x >> "$f"; done && git add . && git commit -q -m "change $*" && git push -q origin main ); }
+rmlogs; "$D2"; check "first run with no change is a no-op" "[ -z \"\$(dlog)\" ]"
+push_mono opencpo-admin/f; rmlogs; "$D2"
+check "admin folder -> only cpo-admin" "dlog | grep -q 'compose build cpo-admin' && ! dlog | grep -qE 'build (ocpp-core|charge-app|charger-farm)'"
+push_mono opencpo-core/f; rmlogs; "$D2"
+check "core folder -> only ocpp-core" "dlog | grep -q 'compose build ocpp-core' && ! dlog | grep -q 'build cpo-admin'"
+push_mono opencpo-charge-app/f opencpo-charger-farm/f; rmlogs; "$D2"
+check "two folders -> both services in one rebuild" "dlog | grep -qE 'compose build (charge-app charger-farm|charger-farm charge-app)'"
+push_mono docs/f opencpo-bastion/f scripts/other; rmlogs; "$D2"
+check "docs, bastion and scripts -> nothing rebuilt" "[ -z \"\$(dlog)\" ]"
+check "...but they were pulled" "[ \"\$(git -C $T/install2 rev-parse HEAD)\" = \"\$(git -C $T/remotes/mono.git rev-parse main)\" ]"
+push_mono docker-compose.yml opencpo-admin/f; rmlogs; "$D2"
+check "compose file change -> whole stack" "dlog | grep -qE 'compose up -d\$'"
+push_mono opencpo-admin/f; ADM_BAD="$(git -C "$T/remotes/mono.git" rev-parse main)"; rmlogs; echo "$ADM_BAD" > "$FAKE_STATE/unhealthy_mono"
+cat > "$T/bin/curl" <<'E2'
+#!/usr/bin/env bash
+echo "curl $*" >> "$FAKE_STATE/curl.log"
+if [ -s "$FAKE_STATE/unhealthy_mono" ] && [ "$(git -C "$FAKE_STATE/../install2" rev-parse HEAD 2>/dev/null)" = "$(cat "$FAKE_STATE/unhealthy_mono")" ]; then exit 22; fi
+if [ -s "$FAKE_STATE/unhealthy" ] && [ "$(git -C "$FAKE_STATE/../install/opencpo-admin" rev-parse HEAD 2>/dev/null)" = "$(cat "$FAKE_STATE/unhealthy")" ]; then exit 22; fi
+echo '{"status":"ok"}'
+E2
+"$D2"; rc=$?
+check "bad single-repo commit is rolled back (exit 1)" "[ $rc = 1 ]"
+check "checkout restored to the previous commit" "[ \"\$(git -C $T/install2 rev-parse HEAD)\" != \"$ADM_BAD\" ]"
+rmlogs; rm -f "$FAKE_STATE/unhealthy_mono"; "$D2"
+check "bad commit not retried" "[ -z \"\$(dlog)\" ]"
+
 echo; echo "passed=$PASS failed=$FAIL"; [ "$FAIL" = 0 ]

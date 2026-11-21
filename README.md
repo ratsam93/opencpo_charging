@@ -6,6 +6,10 @@ Everything you need to run a Charge Point Operator — from protocol to driver a
 
 ---
 
+> **Repository layout:** all components live in this one repository (`opencpo-core/`, `opencpo-admin/`,
+> `opencpo-charge-app/`, `opencpo-charger-farm/`, `opencpo-tester/`, `opencpo-bastion/`). See
+> [docs/COMPONENTS.md](docs/COMPONENTS.md). The links in the table below point to the original upstream projects.
+
 ## The Stack
 
 | Component | What | Port(s) |
