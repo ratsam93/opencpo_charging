@@ -9,9 +9,14 @@ import logging
 import os
 from datetime import datetime, timezone
 
+import hashlib
+import hmac
+import time
+
 from fastapi import APIRouter, HTTPException, Request, Response
 from typing import Optional
 
+from api.api_key_auth import has_valid_management_key
 from state.postgres import db
 from state import charger_registry
 from state.redis import redis_state
@@ -106,17 +111,54 @@ async def chargers_nearby(
 # Operators plug in their own payment provider. This stub handles the common
 # flow: update payment_status, trigger RemoteStartTransaction on success.
 
+# Statuses a payment provider adapter may set. Internal states (for example
+# "remote_start_failed") are set by core itself and cannot be forced from outside.
+_WEBHOOK_STATUSES = {"pending", "open", "authorized", "paid", "failed", "cancelled", "expired", "refunded"}
+_WEBHOOK_MAX_SKEW_S = 300
+
+
+def _webhook_authorized(request: Request, raw_body: bytes) -> bool:
+    """A webhook is accepted when it carries the management key, or a valid signature.
+
+    Signature scheme (HMAC-SHA256 with PAYMENT_WEBHOOK_SECRET, replay window 5 min):
+        X-Webhook-Timestamp: <unix seconds>
+        X-Webhook-Signature: sha256=<hex(hmac_sha256(secret, f"{timestamp}." + raw_body))>
+    If PAYMENT_WEBHOOK_SECRET is not set, only the management key works (fail closed).
+    """
+    if has_valid_management_key(request):
+        return True
+    secret = os.getenv("PAYMENT_WEBHOOK_SECRET", "")
+    if not secret:
+        logger.warning("Payment webhook rejected: PAYMENT_WEBHOOK_SECRET is not set")
+        return False
+    ts = request.headers.get("x-webhook-timestamp", "")
+    sig = request.headers.get("x-webhook-signature", "")
+    try:
+        if abs(time.time() - int(ts)) > _WEBHOOK_MAX_SKEW_S:
+            return False
+    except ValueError:
+        return False
+    expected = "sha256=" + hmac.new(secret.encode(), ts.encode() + b"." + raw_body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(sig, expected)
+
+
 @webhook_router.post("/api/payments/webhook")
 async def payment_webhook(request: Request):
     """
-    Generic payment webhook handler.
+    Payment webhook for provider adapters.
 
+    Authentication: a valid signature (see _webhook_authorized) or the management key.
     Expects JSON body: {"session_id": "<uuid>", "status": "paid"|"cancelled"|...}
-    Or form data: id=<payment_id> (legacy format — looks up by payment_id).
+    Or form data: id=<payment_id> (legacy format, looks up by payment_id).
 
     Payment provider adapters should call this after translating their native format.
-    Must always return 200 — providers retry on any other status.
     """
+    raw_body = await request.body()
+    if not _webhook_authorized(request, raw_body):
+        logger.warning("Payment webhook: rejected unauthenticated call from %s",
+                       request.client.host if request.client else "?")
+        raise HTTPException(status_code=401, detail="Invalid or missing webhook signature")
+
     content_type = request.headers.get("content-type", "")
 
     if "application/x-www-form-urlencoded" in content_type:
@@ -151,6 +193,8 @@ async def payment_webhook(request: Request):
         if not session_id or not status:
             logger.warning("Payment webhook: missing session_id or status in body")
             return {"ok": True}
+        if status not in _WEBHOOK_STATUSES:
+            raise HTTPException(status_code=400, detail=f"Unknown payment status: {status!r}")
 
     async with db.read() as conn:
         row = await conn.fetchrow("""

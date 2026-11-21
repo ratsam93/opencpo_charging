@@ -99,22 +99,22 @@ from api.ocpi_management import router as ocpi_mgmt_router
 from api.network import router as network_router
 from api.api_key_auth import management_auth
 from api.admin_auth import router as admin_auth_router
-from api.admin_setup import router as admin_setup_router
+from api.admin_setup import router as admin_setup_router, status_router as admin_setup_status_router
 from api.admin_update import router as admin_update_router
 from api.admin_backup import router as admin_backup_router
 
 _mgmt = [Depends(management_auth)]  # shorthand for management-only routes
 
 # ── Management endpoints (require MANAGEMENT_API_KEY) ────────────────────
-app.include_router(chargers_router, prefix="/api/v1/chargers", tags=["Chargers"])
+app.include_router(chargers_router, prefix="/api/v1/chargers", tags=["Chargers"], dependencies=_mgmt)
 app.include_router(charger_commands_router, prefix="/api/v1/chargers", tags=["Charger Commands"])
-app.include_router(sessions_router, prefix="/api/v1/sessions", tags=["Sessions"])
+app.include_router(sessions_router, prefix="/api/v1/sessions", tags=["Sessions"], dependencies=_mgmt)
 app.include_router(tariffs_router, prefix="/api/v1/tariffs", tags=["Tariffs"], dependencies=_mgmt)
 app.include_router(tokens_router, prefix="/api/v1/tokens", tags=["Tokens"], dependencies=_mgmt)
 app.include_router(groups_router, prefix="/api/v1/groups", tags=["Groups"], dependencies=_mgmt)
 app.include_router(pki_router, prefix="/api/v1/pki", tags=["PKI"], dependencies=_mgmt)
 app.include_router(pki_admin_router, prefix="/api/v1/pki", tags=["PKI Admin"], dependencies=_mgmt)
-app.include_router(events_router, prefix="/api/v1/events", tags=["Events"])
+app.include_router(events_router, prefix="/api/v1/events", tags=["Events"], dependencies=_mgmt)
 app.include_router(users_router, prefix="/api/v1/users", tags=["Users"], dependencies=_mgmt)
 app.include_router(vehicles_router, prefix="/api/v1/fleet/vehicles", tags=["Fleet"], dependencies=_mgmt)
 app.include_router(driver_accounts_mgmt_router, prefix="/api/v1/driver-accounts", tags=["Driver Accounts"], dependencies=_mgmt)
@@ -122,11 +122,13 @@ app.include_router(mgmt_public_router, prefix="/api/v1/public-sessions", tags=["
 app.include_router(features_router, dependencies=_mgmt)
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Authorization"], dependencies=_mgmt)
 
-# Admin panel auth + setup + update (no management key)
+# Admin panel: login (public) and setup status (public); setup writes, update and
+# backup require the management key (the admin UI sends it server-to-server).
 app.include_router(admin_auth_router)
-app.include_router(admin_setup_router)
-app.include_router(admin_update_router)
-app.include_router(admin_backup_router)
+app.include_router(admin_setup_status_router)
+app.include_router(admin_setup_router, dependencies=_mgmt)
+app.include_router(admin_update_router, dependencies=_mgmt)
+app.include_router(admin_backup_router, dependencies=_mgmt)
 
 # ── Public endpoints (no auth — charge app, webhooks) ─────────────────────
 app.include_router(accounts_router)

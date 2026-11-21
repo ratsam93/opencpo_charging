@@ -35,6 +35,10 @@ from config import config
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/admin/setup", tags=["Admin Setup"])
+# GET /status is public: the admin UI asks it before anyone is logged in. It only
+# says whether setup is complete. Everything that WRITES (router above) is mounted
+# with the management key in api/main.py.
+status_router = APIRouter(prefix="/api/v1/admin/setup", tags=["Admin Setup"])
 
 # ── Setup state is tracked via settings table + feature_flags ────────────
 # Steps use ocpp.feature_flags to mark completion:
@@ -168,7 +172,7 @@ class SetupStatus(BaseModel):
 
 # ── Endpoints ────────────────────────────────────────────────────────────
 
-@router.get("/status")
+@status_router.get("/status")
 async def get_setup_status():
     """Return which setup steps are complete. Used by the admin panel to
     decide whether to show the wizard or the login page."""

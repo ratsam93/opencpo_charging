@@ -66,3 +66,19 @@ async def management_auth(
             detail="Invalid or missing API key. Provide X-API-Key or Authorization: Bearer <key>.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+def has_valid_management_key(request: Request) -> bool:
+    """True when the request carries the correct MANAGEMENT_API_KEY.
+
+    For handlers that accept either the management key or another credential
+    (for example the signed payment webhook). Never raises.
+    """
+    if not _MANAGEMENT_API_KEY:
+        return False
+    provided = request.headers.get("x-api-key")
+    if not provided:
+        auth = request.headers.get("authorization", "")
+        if auth.lower().startswith("bearer "):
+            provided = auth[7:]
+    return bool(provided) and hmac.compare_digest(provided, _MANAGEMENT_API_KEY)

@@ -9,8 +9,10 @@ import os
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
+from api.api_key_auth import management_auth
 from typing import Optional
 
 from state.postgres import db
@@ -173,7 +175,7 @@ async def create_session(req: SessionCreate):
     }
 
 
-@router.post("/sessions/{session_id}/cancel")
+@router.post("/sessions/{session_id}/cancel", dependencies=[Depends(management_auth)])
 async def cancel_session(session_id: str):
     """Cancel a session that hasn't started yet (started_at IS NULL)."""
     async with db.read() as conn:
@@ -200,7 +202,7 @@ async def cancel_session(session_id: str):
     return {"session_id": session_id, "cancelled": True}
 
 
-@router.get("/sessions/{session_id}")
+@router.get("/sessions/{session_id}", dependencies=[Depends(management_auth)])
 async def get_session(session_id: str):
     """Poll session status -- used by live session screen."""
     async with db.read() as conn:
@@ -237,7 +239,7 @@ async def get_session(session_id: str):
     return result
 
 
-@router.post("/sessions/{session_id}/stop")
+@router.post("/sessions/{session_id}/stop", dependencies=[Depends(management_auth)])
 async def stop_session(session_id: str):
     """Request charger to stop a session via RemoteStopTransaction.
 
