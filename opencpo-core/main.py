@@ -188,10 +188,11 @@ async def main():
     ocpp201_server = OCPP201Server(on_connect_201, on_disconnect_201)
 
     # Register charger registry backends
-    from state.charger_registry import set_ocpp16_server, set_redis_state, set_handlers_16
+    from state.charger_registry import set_ocpp16_server, set_redis_state, set_handlers_16, set_handlers_201
     set_ocpp16_server(ocpp16_server)
     set_redis_state(redis_state)
     set_handlers_16(_handlers_16)
+    set_handlers_201(_handlers_201)
 
     # Create tasks for all services
     tasks = [

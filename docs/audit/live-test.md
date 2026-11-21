@@ -36,7 +36,11 @@ were not available.
 - Payment webhook needs an HMAC signature or the management key; verified live: unsigned, wrong, stale and forged-status calls
   refused, a valid signature marks the session paid. The admin setup wizard (fresh database, all 8 steps), admin pages, the live
   event stream and the driver flow still work.
-- Not yet fixed from the list below: items 2, 4-10.
+- **OCPP 2.0.1 storage** now works: timestamps are parsed to datetimes and JSON columns get JSON strings (`ocpp201/timeutil.py`).
+  Verified live: one 100 s farm run stored 74 messages (was ~1 of 60), 11 sessions (6 completed, 199 kWh), 11 meter values,
+  5 security events and 5 connectors, with no errors in core's log. Server-to-charger commands for 2.0.1 chargers are still not
+  implemented; the API now says so (HTTP 501) instead of "not connected".
+- Not yet fixed from the list below: items 4-10 (item 2: commands only).
 
 ## Still open: opencpo-core
 (item 1 and the unauthenticated part of 3 are fixed, see above)

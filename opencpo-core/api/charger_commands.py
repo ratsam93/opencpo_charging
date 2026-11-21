@@ -65,13 +65,28 @@ class UpdateChargerRequest(BaseModel):
 
 # ── Remote Commands ───────────────────────────────────────────────────────────
 
+
+def _not_connected(cp_id: str) -> HTTPException:
+    """Explain why a command cannot be sent.
+
+    Server-initiated commands (RemoteStart, Reset, ...) are only implemented for
+    OCPP 1.6 chargers. A charger that IS connected over 2.0.1 used to get a
+    misleading "not connected" here.
+    """
+    from state.charger_registry import is_connected_201
+    if is_connected_201(cp_id):
+        return HTTPException(
+            501, f"Charger {cp_id} is connected over OCPP 2.0.1; server-initiated commands "
+                 f"are not implemented for 2.0.1 yet")
+    return HTTPException(400, f"Charger {cp_id} is not connected")
+
 @router.post("/{cp_id}/start", dependencies=[Depends(management_auth)])
 async def remote_start(cp_id: str, req: RemoteStartRequest):
     """Send RemoteStartTransaction to a charger."""
     from state.charger_registry import send_remote_start, is_connected
 
     if not is_connected(cp_id):
-        raise HTTPException(400, f"Charger {cp_id} is not connected")
+        raise _not_connected(cp_id)
 
     id_tag = req.id_tag or "REMOTE"
     msg_id = await send_remote_start(cp_id, req.connector_id, id_tag)
@@ -87,7 +102,7 @@ async def remote_stop(cp_id: str, transaction_id: int = Query(None), connector_i
     from state.charger_registry import send_remote_stop, is_connected
 
     if not is_connected(cp_id):
-        raise HTTPException(400, f"Charger {cp_id} is not connected")
+        raise _not_connected(cp_id)
 
     if transaction_id is None:
         async with db.read() as conn:
@@ -120,7 +135,7 @@ async def reset_charger(cp_id: str, reset_type: str = Query("Soft")):
     if reset_type not in ("Soft", "Hard"):
         raise HTTPException(400, "reset_type must be 'Soft' or 'Hard'")
     if not is_connected(cp_id):
-        raise HTTPException(400, f"Charger {cp_id} is not connected")
+        raise _not_connected(cp_id)
 
     msg_id = await send_reset(cp_id, reset_type)
     if msg_id is None:
@@ -135,7 +150,7 @@ async def set_charging_profile(cp_id: str, req: ChargingProfileRequest):
     from state.charger_registry import send_command, is_connected
 
     if not is_connected(cp_id):
-        raise HTTPException(400, f"Charger {cp_id} is not connected")
+        raise _not_connected(cp_id)
 
     profile_payload = {
         "connectorId": req.connector_id,
@@ -168,7 +183,7 @@ async def send_generic_command(cp_id: str, req: GenericCommandRequest):
     from state.charger_registry import send_command, is_connected
 
     if not is_connected(cp_id):
-        raise HTTPException(400, f"Charger {cp_id} is not connected")
+        raise _not_connected(cp_id)
 
     msg_id = await send_command(cp_id, req.action, req.payload)
     if msg_id is None:

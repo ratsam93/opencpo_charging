@@ -7,10 +7,12 @@ Mixin for ChargePointHandler201 — covers:
 - SecurityEventNotification (tamper, cert, firmware audit events)
 - _validate_contract_cert helper (P&C eMAID auth)
 """
+import json
 import logging
 from datetime import datetime, timezone
 
 from events.types import Event, EventType
+from ocpp201.timeutil import parse_timestamp
 from state.postgres import db
 from ocpp201.protocol import AuthorizationStatus
 
@@ -23,7 +25,7 @@ class SecurityMixin:
     async def _on_security_event(self, payload: dict) -> dict:
         """Security event from charger — log + publish."""
         event_type = payload.get("type", "")
-        timestamp = payload.get("timestamp", datetime.now(timezone.utc).isoformat())
+        timestamp = parse_timestamp(payload.get("timestamp"))
         tech_info = payload.get("techInfo", "")
 
         severity = "critical" if "Tamper" in event_type or "InvalidCertificate" in event_type else "warning"
@@ -32,7 +34,7 @@ class SecurityMixin:
             await conn.execute("""
                 INSERT INTO ocpp.security_events (time, charge_point, event_type, severity, details)
                 VALUES ($1, $2, $3, $4, $5)
-            """, timestamp, self.cp_id, event_type, severity, {"tech_info": tech_info})
+            """, timestamp, self.cp_id, event_type, severity, json.dumps({"tech_info": tech_info}))
 
         await self.event_bus.publish(Event(
             type=EventType.OPS_ALERT,

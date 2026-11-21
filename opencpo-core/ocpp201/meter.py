@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from events.types import Event, EventType
+from ocpp201.timeutil import parse_timestamp
 from state.postgres import db
 from state.redis import redis_state
 
@@ -28,11 +29,11 @@ class MeterMixin:
 
     async def _process_meter_values(
         self, session_id: str | None, meter_values: list,
-        timestamp: str | None, evse_id: int = 0,
+        timestamp: datetime | None, evse_id: int = 0,
     ) -> None:
         """Process 2.0.1 meter values — unified format."""
         for mv in meter_values:
-            ts = mv.get("timestamp", timestamp or datetime.now(timezone.utc).isoformat())
+            ts = parse_timestamp(mv.get("timestamp"), default=timestamp)
             sampled = mv.get("sampledValue", [])
             readings = self._parse_sampled_values_201(sampled)
 
@@ -43,7 +44,7 @@ class MeterMixin:
                     "power_kw": readings.get("power_kw", 0),
                     "energy_kwh": readings.get("energy_kwh", 0),
                     "soc_pct": readings.get("soc_pct", 0),
-                    "timestamp": ts,
+                    "timestamp": ts.isoformat(),
                 })
 
                 # Update session energy in PG

@@ -15,6 +15,7 @@ Structure (split per architecture v2):
 - meter.py       — MeterMixin: MeterValues + parsing helpers
 - security.py    — SecurityMixin: SignCertificate, Get15118EV, SecurityEvent
 """
+import json
 import logging
 import os
 import time
@@ -23,6 +24,7 @@ from datetime import datetime, timezone
 from config import config
 from events.bus import EventBus
 from events.types import Event, EventType
+from ocpp201.timeutil import parse_timestamp
 from state.postgres import db
 from state.redis import redis_state
 from ocpp201.protocol import (
@@ -173,7 +175,7 @@ class ChargePointHandler201(TransactionMixin, MeterMixin, SecurityMixin):
         evse_id = payload.get("evseId", 0)
         connector_id = payload.get("connectorId", 0)
         status = payload.get("connectorStatus", "Available")
-        timestamp = payload.get("timestamp", datetime.now(timezone.utc).isoformat())
+        timestamp = parse_timestamp(payload.get("timestamp"))
 
         async with db.write() as conn:
             await conn.execute("""
@@ -334,8 +336,8 @@ class ChargePointHandler201(TransactionMixin, MeterMixin, SecurityMixin):
                     INSERT INTO ocpp.ocpp_messages
                         (charge_point, direction, ocpp_version, action, message_id, payload, response, latency_ms)
                     VALUES ($1, 'in', '2.0.1', $2, $3, $4, $5, $6)
-                """, self.cp_id, msg.action, msg.unique_id, msg.payload,
-                    response.payload if response else None, latency_ms)
+                """, self.cp_id, msg.action, msg.unique_id, json.dumps(msg.payload),
+                    json.dumps(response.payload) if response else None, latency_ms)
         except Exception as e:
             logger.debug(f"Message log failed: {e}")
 

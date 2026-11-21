@@ -31,6 +31,20 @@ def set_redis_state(redis_state) -> None:
     _redis_state = redis_state
 
 
+_handlers_201 = None  # dict[str, ChargePointHandler201]: set by main.py
+
+
+def set_handlers_201(handlers: dict) -> None:
+    """Remember the live OCPP 2.0.1 connections (used to explain why a command cannot be sent)."""
+    global _handlers_201
+    _handlers_201 = handlers
+
+
+def is_connected_201(cp_id: str) -> bool:
+    """True when the charger is connected over OCPP 2.0.1."""
+    return bool(_handlers_201) and cp_id in _handlers_201
+
+
 def set_handlers_16(handlers: dict) -> None:
     """Register the OCPP 1.6j handler dict."""
     global _handlers_16

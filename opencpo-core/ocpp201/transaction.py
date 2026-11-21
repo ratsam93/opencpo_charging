@@ -4,10 +4,12 @@ OCPP 2.0.1 TransactionEvent handling.
 Mixin for ChargePointHandler201 — handles Started/Updated/Ended lifecycle.
 Replaces StartTransaction + StopTransaction + periodic MeterValues from 1.6j.
 """
+import json
 import logging
 from datetime import datetime, timezone
 
 from events.types import Event, EventType
+from ocpp201.timeutil import parse_timestamp
 from state.postgres import db
 from state.redis import redis_state
 from ocpp201.protocol import TransactionEventType
@@ -28,7 +30,7 @@ class TransactionMixin:
         event_type = payload.get("eventType", "")
         trigger = payload.get("triggerReason", "")
         seq_no = payload.get("seqNo", 0)
-        timestamp = payload.get("timestamp", datetime.now(timezone.utc).isoformat())
+        timestamp = parse_timestamp(payload.get("timestamp"))
 
         transaction = payload.get("transactionInfo", {})
         transaction_id = transaction.get("transactionId", "")
@@ -66,7 +68,7 @@ class TransactionMixin:
 
     async def _transaction_started(
         self, txn_id: str, evse_id: int, connector_id: int,
-        token_id: str, token_type: str, timestamp: str, trigger: str,
+        token_id: str, token_type: str, timestamp: datetime, trigger: str,
     ) -> dict:
         """New charging session."""
         auth_method = "pnc" if token_type == "eMAID" else "rfid" if token_id else "remote"
@@ -78,7 +80,8 @@ class TransactionMixin:
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING id::text as session_id
             """, self.cp_id, connector_id, auth_method, token_id, timestamp,
-                self._simulated, {"transaction_id": txn_id, "evse_id": evse_id, "trigger": trigger})
+                self._simulated,
+                json.dumps({"transaction_id": txn_id, "evse_id": evse_id, "trigger": trigger}))
 
         session_id = session["session_id"]
         self._active_transactions[txn_id] = session_id
@@ -90,7 +93,7 @@ class TransactionMixin:
             "transaction_id": txn_id,
             "auth_id": token_id,
             "auth_method": auth_method,
-            "start_time": timestamp,
+            "start_time": timestamp.isoformat(),
             "energy_kwh": "0",
             "power_kw": "0",
             "status": "active",
@@ -110,7 +113,7 @@ class TransactionMixin:
         return {}
 
     async def _transaction_updated(
-        self, txn_id: str, meter_values: list, timestamp: str,
+        self, txn_id: str, meter_values: list, timestamp: datetime,
         charging_state: str | None, trigger: str, seq_no: int,
     ) -> dict:
         """Session update — meter values and/or state change."""
@@ -136,7 +139,7 @@ class TransactionMixin:
         return {}
 
     async def _transaction_ended(
-        self, txn_id: str, meter_values: list, timestamp: str,
+        self, txn_id: str, meter_values: list, timestamp: datetime,
         stopped_reason: str | None, trigger: str,
     ) -> dict:
         """Session ended."""
