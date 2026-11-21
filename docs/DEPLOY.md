@@ -48,6 +48,11 @@ rm .deploy/PAUSE
 ```
 Check `docker compose ps` and `scripts/deploy.sh --status` afterwards.
 
+**Charger authentication:** core now refuses OCPP connections without a per-charger password (see
+`opencpo-core/docs/charger-authentication.md`). The simulator container is trusted by default; give every real charger
+a password (`scripts/charger-credentials.sh create <id>`) and, for Bastion sites, add the private mesh range to
+`OCPP_TRUSTED_CIDRS` in `.env`. Set `OCPP_AUTH_MODE=off` only temporarily while migrating.
+
 Core now requires the management key on its admin, charger, session and event routes and signs-checks its payment
 webhook. The admin and charge app send the key, so deploy them together (one push does). For an existing `.env`, add a
 webhook secret once: `echo "PAYMENT_WEBHOOK_SECRET='$(openssl rand -hex 32)'" >> .env` (see `opencpo-core/docs/payments.md`). The component folders now come from this

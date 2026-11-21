@@ -578,3 +578,14 @@ CREATE TABLE IF NOT EXISTS ocpp.backup_records (
     notes           TEXT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- ── Charger credentials (OCPP WebSocket authentication) ───────────────────
+-- One bcrypt-hashed password per charge point (HTTP Basic: user = charge point id).
+-- Managed through /api/v1/charger-credentials. Also created at startup for existing databases.
+CREATE TABLE IF NOT EXISTS ocpp.charger_credentials (
+    charge_point  TEXT PRIMARY KEY,
+    password_hash TEXT NOT NULL,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    revoked_at    TIMESTAMPTZ
+);

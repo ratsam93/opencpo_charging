@@ -61,6 +61,14 @@ services:
       JWT_SECRET: ${SECRET_KEY:?SECRET_KEY is not set - run configure.py or edit .env}
       MANAGEMENT_API_KEY: ${MANAGEMENT_API_KEY:?MANAGEMENT_API_KEY is not set - run configure.py or edit .env}
       API_KEY: ${MANAGEMENT_API_KEY:?MANAGEMENT_API_KEY is not set - run configure.py or edit .env}
+      # OCPP charger authentication: "required" (default) or "off" (development only).
+      # Chargers use HTTP Basic auth with a per-charger password (scripts/charger-credentials.sh).
+      OCPP_AUTH_MODE: ${OCPP_AUTH_MODE:-required}
+      # Peers that may connect without a password: comma-separated hosts (resolved via DNS)
+      # and/or CIDR networks. The simulator container is trusted by default; add the private
+      # mesh of your Bastion sites to OCPP_TRUSTED_CIDRS (for example 100.64.0.0/10).
+      OCPP_TRUSTED_HOSTS: ${OCPP_TRUSTED_HOSTS-charger-farm}
+      OCPP_TRUSTED_CIDRS: ${OCPP_TRUSTED_CIDRS:-}
       # HMAC secret payment adapters use to sign POST /api/payments/webhook (empty = only the management key works)
       PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET:-}
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost}

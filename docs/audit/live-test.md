@@ -40,7 +40,12 @@ were not available.
   Verified live: one 100 s farm run stored 74 messages (was ~1 of 60), 11 sessions (6 completed, 199 kWh), 11 meter values,
   5 security events and 5 connectors, with no errors in core's log. Server-to-charger commands for 2.0.1 chargers are still not
   implemented; the API now says so (HTTP 501) instead of "not connected".
-- Not yet fixed from the list below: items 4-10 (item 2: commands only).
+- **Charger authentication** (item 4): per-charger passwords (HTTP Basic, bcrypt), client-certificate name check, optional trusted
+  hosts/networks, id validation, no auto-registration, brute-force throttling, revoke disconnects. Verified live on both OCPP versions:
+  anonymous, empty-id and bogus-header attempts refused (401/400), valid passwords connect, a revoked live charger is closed (1008)
+  and cannot return, brute force gets 429, and the farm still works through the trusted-host path. See
+  `opencpo-core/docs/charger-authentication.md`.
+- Not yet fixed from the list below: items 5-10 (item 2: commands only).
 
 ## Still open: opencpo-core
 (item 1 and the unauthenticated part of 3 are fixed, see above)

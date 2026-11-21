@@ -19,6 +19,24 @@ _redis_state = None  # state.redis.RedisState
 _handlers_16 = None  # dict[str, ChargePointHandler] — set by main.py
 
 
+_ocpp201_server = None
+
+
+def set_ocpp201_server(server) -> None:
+    """Set by main.py after OCPP201Server is created."""
+    global _ocpp201_server
+    _ocpp201_server = server
+
+
+async def disconnect(cp_id: str, code: int = 1008, reason: str = "credentials revoked") -> bool:
+    """Close a charger's live connection, whichever OCPP version it uses."""
+    closed = False
+    for server in (_ocpp16_server, _ocpp201_server):
+        if server is not None and await server.disconnect(cp_id, code, reason):
+            closed = True
+    return closed
+
+
 def set_ocpp16_server(server) -> None:
     """Register the OCPP 1.6j server instance."""
     global _ocpp16_server

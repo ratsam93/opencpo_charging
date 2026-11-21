@@ -28,6 +28,6 @@ cd opencpo-charger-farm && pip install -r requirements-dev.txt && pytest    # fa
 cd opencpo-bastion && pip install -r requirements.txt pytest pytest-asyncio && pytest   # bastion (48)
 scripts/test-deploy.sh                                                      # deploy script (40)
 ```
-cd opencpo-core && pip install -r requirements-dev.txt && pytest            # core (107, no database needed)
+cd opencpo-core && pip install -r requirements-dev.txt && pytest            # core (161, no database needed)
 
 Audited commits and findings: [audit/README.md](audit/README.md), [audit/live-test.md](audit/live-test.md).

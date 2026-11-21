@@ -127,6 +127,11 @@ async def startup():
     await db.connect()
     logger.info("Database connected")
 
+    # Charger authentication (credentials table is created here for existing databases)
+    from security import charger_auth
+    await charger_auth.ensure_schema(db)
+    charger_auth.authenticator = charger_auth.ChargerAuthenticator.from_env(db)
+
     # Redis
     await redis_state.connect()
     logger.info("Redis state connected")
@@ -188,8 +193,9 @@ async def main():
     ocpp201_server = OCPP201Server(on_connect_201, on_disconnect_201)
 
     # Register charger registry backends
-    from state.charger_registry import set_ocpp16_server, set_redis_state, set_handlers_16, set_handlers_201
+    from state.charger_registry import set_ocpp16_server, set_ocpp201_server, set_redis_state, set_handlers_16, set_handlers_201
     set_ocpp16_server(ocpp16_server)
+    set_ocpp201_server(ocpp201_server)
     set_redis_state(redis_state)
     set_handlers_16(_handlers_16)
     set_handlers_201(_handlers_201)
