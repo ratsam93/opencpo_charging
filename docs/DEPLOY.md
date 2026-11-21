@@ -54,6 +54,11 @@ their health on `127.0.0.1`.
   `./scripts` read-only (for the backup helper) and the backup volume. The admin "update" button is
   therefore disabled; to enable it deliberately use `docker-compose.updater.yml`
   (read the warning at its top). Prefer `scripts/deploy.sh`.
+- Core's certificate authority (root CA, sub-CAs, private keys) lives in the `pki-data` volume at
+  `/app/data/pki`. Without it the CA is regenerated every time the core container is recreated and every
+  certificate issued before becomes orphaned. **If your `docker-compose.override.yml` replaces core's
+  `volumes` (for example with `!override`), keep `pki-data:/app/data/pki` and `backup-data:/app/backups`
+  in the list.**
 - Core's own migrations do not work. After the first `docker compose up`, run `scripts/load-schema.sh`
   once (it is idempotent and restarts core). `setup.sh` does the same on a first install.
 

@@ -77,6 +77,10 @@ services:
       # Read-only helper used by the backup/restore endpoints. No secrets in here.
       - ./scripts:/app/opencpo/scripts:ro
       - backup-data:/app/backups
+      # The certificate authority (root CA, sub-CAs and their private keys) lives
+      # here. Without a volume it is regenerated whenever the container is
+      # recreated, which orphans every certificate issued before.
+      - pki-data:/app/data/pki
       # The in-app "update" button needs the Docker socket and the whole repo
       # (including .env) mounted into this container. That is root-equivalent on
       # the host, so it is OFF by default: see docker-compose.updater.yml.
@@ -155,4 +159,6 @@ volumes:
   pgdata:
     driver: local
   backup-data:
+    driver: local
+  pki-data:
     driver: local
