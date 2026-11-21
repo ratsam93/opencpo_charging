@@ -26,3 +26,8 @@ Thumbs.db
 # Install target (created by install.sh)
 opencpo/
 opencpo-new/
+
+# Auto-deploy state and logs (scripts/deploy.sh)
+.deploy/
+deploy.log
+deploy.log.1

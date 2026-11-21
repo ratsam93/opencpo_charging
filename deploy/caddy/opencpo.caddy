@@ -1,0 +1,22 @@
+# Caddyfile blocks for OpenCPO. Replace the hostnames and the password hash.
+# Generate a hash:   docker exec <caddy-container> caddy hash-password
+# Before reloading:  caddy validate --config <Caddyfile>   then   caddy reload
+# (Caddy reaches the apps through the shared "opencpo_edge" Docker network.)
+
+charger1.techbeyondsolution.com {
+	basic_auth {
+		tester REPLACE_WITH_BCRYPT_HASH
+	}
+	# The charge app must never trust this header from the internet.
+	request_header -X-Client-Cert-Serial
+	reverse_proxy opencpo-charge:8003
+}
+
+admin.charger1.techbeyondsolution.com {
+	basic_auth {
+		tester REPLACE_WITH_BCRYPT_HASH
+	}
+	reverse_proxy opencpo-admin:8080
+}
+
+# Do NOT proxy ocpp-core (8000, 9100, 9201) until its authentication is fixed.
