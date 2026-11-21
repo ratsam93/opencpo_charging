@@ -31,3 +31,7 @@ opencpo-new/
 .deploy/
 deploy.log
 deploy.log.1
+
+# Local server configuration (never commit)
+docker-compose.override.yml
+edge/

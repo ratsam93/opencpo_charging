@@ -31,13 +31,39 @@ project. Once you have your own fork, add a line to `.deploy/repos.conf`:
 `opencpo-core|https://github.com/<you>/opencpo-core.git|<branch>|ocpp-core`
 (a `repos.conf` replaces the defaults, so copy the other lines into it too).
 
+## Public access: two layouts
+
+**A. Dedicated Caddy container (what the first deployment uses).** A separate Caddy container,
+defined in the git-ignored `edge/` folder and `docker-compose.override.yml`, serves
+`https://charger1.techbeyondsolution.com:8443` with its own Let's Encrypt certificate
+(DNS-01 challenge via Cloudflare) and HTTP basic auth, proxying only `cpo-admin`. It does not
+touch any other proxy on the host, and `ufw` allows 8443/tcp. Keep the Cloudflare token in `edge/`
+(never in git). Core and the charge app are not exposed.
+
+**B. Join an existing proxy.** Use `docker-compose.edge.yml` (below) and `deploy/caddy/opencpo.caddy`
+if an existing Caddy already owns ports 80/443 and you are happy to edit its config.
+
+Either way, `scripts/deploy.sh` is independent of the proxy: it only rebuilds services and checks
+their health on `127.0.0.1`.
+
+## Safe defaults in `docker-compose.yml`
+
+- Every published port binds to `127.0.0.1` (`BIND_ADDR`, default `127.0.0.1`). Set `BIND_ADDR=0.0.0.0`
+  in `.env` only if you want the services reachable from the network, and remember Docker bypasses `ufw`.
+- Core does **not** mount the Docker socket or the repository (which contains `.env`). It only gets
+  `./scripts` read-only (for the backup helper) and the backup volume. The admin "update" button is
+  therefore disabled; to enable it deliberately use `docker-compose.updater.yml`
+  (read the warning at its top). Prefer `scripts/deploy.sh`.
+- Core's own migrations do not work. After the first `docker compose up`, run `scripts/load-schema.sh`
+  once (it is idempotent and restarts core). `setup.sh` does the same on a first install.
+
 ## One-time server setup (as the `opencpo` user unless noted)
 
 1. **DNS.** Point two A records at the server: `charger1.techbeyondsolution.com` (driver app)
    and `admin.charger1.techbeyondsolution.com` (admin dashboard).
-2. **Stack already running** from `~/opencpo_charging` with `.env` (mode 600) and, optionally,
-   `docker-compose.override.yml` binding every port to `127.0.0.1`.
-3. **Shared network for the reverse proxy.** The proxy (Caddy) runs in another Docker project,
+2. **Stack already running** from `~/opencpo_charging` with `.env` (mode 600), the schema loaded
+   (`scripts/load-schema.sh`), and optionally a git-ignored `docker-compose.override.yml`.
+3. **(Layout B only) Shared network for the reverse proxy.** The proxy (Caddy) runs in another Docker project,
    so it cannot use `127.0.0.1`. Add to `.env`:
    `COMPOSE_FILE=docker-compose.yml:docker-compose.override.yml:docker-compose.edge.yml`
    (drop the override file from the list if you don't use one), then
@@ -45,7 +71,7 @@ project. Once you have your own fork, add a line to `.deploy/repos.conf`:
    `docker network connect opencpo_edge <caddy-container-name>`.
    *This attachment is lost if the proxy container is ever recreated; re-run the command, or add the
    `opencpo_edge` network to the proxy's own compose file.*
-4. **Reverse proxy.** Add the blocks from `deploy/caddy/opencpo.caddy` to the Caddyfile
+4. **(Layout B only) Reverse proxy.** Add the blocks from `deploy/caddy/opencpo.caddy` to the Caddyfile
    (back it up first, `caddy validate`, then a graceful `caddy reload`, never a restart).
    Both sites sit behind `basic_auth` while testing, and the charge app's block strips
    `X-Client-Cert-Serial`. Do not proxy `ocpp-core`.

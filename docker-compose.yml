@@ -41,9 +41,9 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "${OCPP_16_WS_PORT:-9100}:9100"   # OCPP 1.6 WebSocket
-      - "${OCPP_201_WS_PORT:-9201}:9201"  # OCPP 2.0.1 WebSocket
-      - "${OCPP_API_PORT:-8000}:8000"     # REST API
+      - "${BIND_ADDR:-127.0.0.1}:${OCPP_16_WS_PORT:-9100}:9100"   # OCPP 1.6 WebSocket
+      - "${BIND_ADDR:-127.0.0.1}:${OCPP_201_WS_PORT:-9201}:9201"  # OCPP 2.0.1 WebSocket
+      - "${BIND_ADDR:-127.0.0.1}:${OCPP_API_PORT:-8000}:8000"     # REST API
     environment:
       # Database
       PG_HOST: postgres
@@ -74,9 +74,12 @@ services:
       retries: 7
       start_period: 45s
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./:/app/opencpo:rw
+      # Read-only helper used by the backup/restore endpoints. No secrets in here.
+      - ./scripts:/app/opencpo/scripts:ro
       - backup-data:/app/backups
+      # The in-app "update" button needs the Docker socket and the whole repo
+      # (including .env) mounted into this container. That is root-equivalent on
+      # the host, so it is OFF by default: see docker-compose.updater.yml.
 
   # ── Operator Dashboard ────────────────────────────────────────────────────
 
@@ -87,7 +90,7 @@ services:
       ocpp-core:
         condition: service_healthy
     ports:
-      - "${CPO_ADMIN_PORT:-8080}:8080"
+      - "${BIND_ADDR:-127.0.0.1}:${CPO_ADMIN_PORT:-8080}:8080"
     environment:
       OCPP_CORE_API: http://ocpp-core:8000
       CORE_API_KEY: ${MANAGEMENT_API_KEY:?MANAGEMENT_API_KEY is not set - run configure.py or edit .env}
@@ -111,7 +114,7 @@ services:
       ocpp-core:
         condition: service_healthy
     ports:
-      - "${CHARGE_APP_PORT:-8003}:8003"
+      - "${BIND_ADDR:-127.0.0.1}:${CHARGE_APP_PORT:-8003}:8003"
     environment:
       OCPP_CORE_API: http://ocpp-core:8000
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost}
@@ -127,7 +130,7 @@ services:
     # Run it on demand:  docker compose run --rm --service-ports compliance-tester
     restart: "no"
     ports:
-      - "${COMPLIANCE_PORT:-8090}:8090"
+      - "${BIND_ADDR:-127.0.0.1}:${COMPLIANCE_PORT:-8090}:8090"
     # The tester is a CLI + WebSocket listener: chargers connect TO it on this
     # port. It does not dial out to ocpp-core and has no web UI.
     environment:
@@ -142,7 +145,7 @@ services:
       ocpp-core:
         condition: service_healthy
     ports:
-      - "${CHARGER_FARM_PORT:-8087}:8087"
+      - "${BIND_ADDR:-127.0.0.1}:${CHARGER_FARM_PORT:-8087}:8087"
     environment:
       OCPP16_URL: ws://ocpp-core:9100
       OCPP201_URL: ws://ocpp-core:9201

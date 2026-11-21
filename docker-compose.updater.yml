@@ -1,0 +1,15 @@
+# OPT-IN: enables the in-app "update" button in the admin dashboard.
+#
+# WARNING: this mounts the Docker socket (root-equivalent on the host) and the
+# whole repository, including .env with every secret, into the core container.
+# Anyone who can reach core's update/admin endpoints, or compromise core, gets
+# control of the host. Core's admin endpoints are not authenticated in the
+# audited version. Prefer scripts/deploy.sh (see docs/DEPLOY.md).
+#
+# Enable:  docker compose -f docker-compose.yml -f docker-compose.updater.yml up -d
+#     or:  COMPOSE_FILE=docker-compose.yml:docker-compose.updater.yml   (in .env)
+services:
+  ocpp-core:
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./:/app/opencpo:rw

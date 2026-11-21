@@ -97,7 +97,9 @@ def color(text, *codes):
 def ask(prompt, default="", secret=False):
     """Prompt user with a default value displayed."""
     if default:
-        prompt = f"{prompt} [{color(default, DIM)}]"
+        # never echo a generated secret into the terminal or its logs
+        shown = "generated, hidden" if secret else default
+        prompt = f"{prompt} [{color(shown, DIM)}]"
     prompt = f"{color('→', CYAN)} {prompt}: "
 
     if secret:
