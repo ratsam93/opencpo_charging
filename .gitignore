@@ -1,13 +1,6 @@
 # Environment
 .env
 
-# Component repos (cloned by setup.sh)
-opencpo-core/
-opencpo-admin/
-opencpo-charge-app/
-opencpo-tester/
-opencpo-charger-farm/
-opencpo-bastion/
 
 # Python
 __pycache__/

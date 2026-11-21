@@ -404,7 +404,9 @@ COMPONENTS=(
 )
 
 for repo in "${COMPONENTS[@]}"; do
-  if [ -d "$repo/.git" ]; then
+  if [ -f "$repo/Dockerfile" ] && [ ! -d "$repo/.git" ]; then
+    ok "$repo is included in this repository"
+  elif [ -d "$repo/.git" ]; then
     ok "$repo already exists -- pulling latest"
     git -C "$repo" pull --ff-only 2>/dev/null || true
   else
