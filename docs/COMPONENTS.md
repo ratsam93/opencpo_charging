@@ -1,18 +1,33 @@
-# Component repositories
+# Repository layout
 
-`docker-compose.yml` builds each service from a folder next to it. These folders are cloned by
-`setup.sh` (and are git-ignored here). Upstream project: https://github.com/opencpo
+Everything lives in this one repository. Each component is a folder with its own `Dockerfile`, and
+`docker-compose.yml` builds them from here.
 
-| Folder | Upstream | Fork used for fixes |
-|---|---|---|
-| `opencpo-core` | opencpo/opencpo-core | not yet forked |
-| `opencpo-admin` | opencpo/opencpo-admin | ratsam93/opencpo-admin_charger |
-| `opencpo-charge-app` | opencpo/opencpo-charge-app | ratsam93/opencpo-charge-app |
-| `opencpo-tester` | opencpo/opencpo-tester | ratsam93/opencpo-tester |
-| `opencpo-charger-farm` | opencpo/opencpo-charger-farm | ratsam93/opencpo-charger-farm |
-| `opencpo-bastion` | opencpo/opencpo-bastion (not in compose) | ratsam93/opencpo-bastion |
+| Folder | What it is | Compose service | Origin |
+|---|---|---|---|
+| `opencpo-core/` | OCPP 1.6 / 2.0.1 CSMS, REST API, PKI | `ocpp-core` | upstream `opencpo/opencpo-core` @ `b2d5ee8`, **now modified here** (authentication, payment webhook; see `docs/audit/live-test.md`) |
+| `opencpo-admin/` | operator dashboard | `cpo-admin` | fork `opencpo-admin_charger` @ `96a92c4` |
+| `opencpo-charge-app/` | driver PWA | `charge-app` | fork `opencpo-charge-app` @ `bac950d` |
+| `opencpo-charger-farm/` | virtual charger simulator | `charger-farm` | fork `opencpo-charger-farm` @ `b8fb3f2` |
+| `opencpo-tester/` | OCPP compliance tester (CLI + WebSocket listener) | `compliance-tester` | fork `opencpo-tester` @ `d9dd09f` |
+| `opencpo-bastion/` | Raspberry Pi site controller (not part of compose) | none | fork `opencpo-bastion` @ `ac1b8dd` |
 
-Audited commits: core `b2d5ee8`, admin `22bbc51`, charge-app `9f5c2e4`, tester `479e91f`,
-charger-farm `f2a5daa`, bastion `1c07c77`. See [audit/README.md](audit/README.md).
+The folders were imported as plain source (no nested git history). The old per-component repositories
+under `ratsam93/` are no longer the place to make changes: work here, with one branch and one pull
+request per change. Each folder keeps its own `LICENSE` and `NOTICE` (Apache-2.0).
 
-To test your forks on a server, clone each fork into the folder name in the first column.
+Other top-level pieces: `scripts/` (deploy, schema loader), `deploy/` (systemd, Caddy), `docs/`, `configure.py`,
+`setup.sh`, `update.sh`.
+
+## Running a component's tests
+```bash
+cd opencpo-admin && pip install -r requirements.txt pytest && pytest        # admin (20)
+cd opencpo-charge-app && pip install -r requirements-dev.txt && pytest      # charge app (19)
+cd opencpo-tester && pip install -r requirements.txt pytest && pytest       # tester (6)
+cd opencpo-charger-farm && pip install -r requirements-dev.txt && pytest    # farm (10)
+cd opencpo-bastion && pip install -r requirements.txt pytest pytest-asyncio && pytest   # bastion (48)
+scripts/test-deploy.sh                                                      # deploy script (40)
+```
+cd opencpo-core && pip install -r requirements-dev.txt && pytest            # core (107, no database needed)
+
+Audited commits and findings: [audit/README.md](audit/README.md), [audit/live-test.md](audit/live-test.md).

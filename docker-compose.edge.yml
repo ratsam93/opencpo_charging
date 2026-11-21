@@ -1,0 +1,21 @@
+# Optional: lets an EXISTING reverse proxy running in another Docker project
+# (e.g. Caddy) reach the OpenCPO web apps by name over a shared network.
+# Enable by adding it to COMPOSE_FILE in .env:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.override.yml:docker-compose.edge.yml
+# then attach the proxy container once:  docker network connect opencpo_edge <proxy-container>
+# See docs/DEPLOY.md.
+services:
+  cpo-admin:
+    networks:
+      default: {}
+      edge:
+        aliases: [opencpo-admin]
+  charge-app:
+    networks:
+      default: {}
+      edge:
+        aliases: [opencpo-charge]
+
+networks:
+  edge:
+    name: opencpo_edge

@@ -97,7 +97,9 @@ def color(text, *codes):
 def ask(prompt, default="", secret=False):
     """Prompt user with a default value displayed."""
     if default:
-        prompt = f"{prompt} [{color(default, DIM)}]"
+        # never echo a generated secret into the terminal or its logs
+        shown = "generated, hidden" if secret else default
+        prompt = f"{prompt} [{color(shown, DIM)}]"
     prompt = f"{color('→', CYAN)} {prompt}: "
 
     if secret:
@@ -259,6 +261,7 @@ def gather_config():
 
     config["secret_key"] = ask("Secret key (leave blank to generate)", generate_secret())
     config["management_api_key"] = generate_secret(48)
+    config["payment_webhook_secret"] = generate_secret(48)
     config["log_level"] = ask("Log level", "INFO")
     config["ocpp16_port"] = ask("OCPP 1.6 WebSocket port", "9100")
     config["ocpp201_port"] = ask("OCPP 2.0.1 WebSocket port", "9201")
@@ -299,6 +302,7 @@ REDIS_PORT={config["redis_port"]}
 # ── Core CSMS (ocpp-core) ──────────────────────────────────────────────────
 SECRET_KEY={config["secret_key"]}
 MANAGEMENT_API_KEY={config["management_api_key"]}
+PAYMENT_WEBHOOK_SECRET={config["payment_webhook_secret"]}
 LOG_LEVEL={config["log_level"]}
 OCPP_16_WS_PORT={config["ocpp16_port"]}
 OCPP_201_WS_PORT={config["ocpp201_port"]}
@@ -374,7 +378,7 @@ def show_summary(config, env_path):
     print(color("│", CYAN) + f"  {color('─' * 53, DIM)}".ljust(55) + color("│", CYAN))
     print(color("│", CYAN) + f"  {color('Org:', DIM)} {config['org_name']}".ljust(55) + color("│", CYAN))
     print(color("│", CYAN) + f"  {color('URL:', DIM)} {config['public_url']}".ljust(55) + color("│", CYAN))
-    print(color("│", CYAN) + f"  {color('Key:', DIM)} {config['secret_key'][:16]}...".ljust(55) + color("│", CYAN))
+    print(color("│", CYAN) + f"  {color('Secrets:', DIM)} written to .env (not shown)".ljust(55) + color("│", CYAN))
     print(color("│", CYAN) + f"  {color('Setup:', DIM)} Create admin account on first visit at http://localhost:{config['admin_port']}".ljust(55) + color("│", CYAN))
 
     print(color("╰" + "─" * 56 + "╯", CYAN))
@@ -440,6 +444,7 @@ def _defaults():
         "redis_port": "6379",
         "secret_key": generate_secret(),
         "management_api_key": generate_secret(),
+        "payment_webhook_secret": generate_secret(),
         "log_level": "INFO",
         "ocpp16_port": "9100",
         "ocpp201_port": "9201",

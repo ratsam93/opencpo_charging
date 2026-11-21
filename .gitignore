@@ -1,13 +1,6 @@
 # Environment
 .env
 
-# Component repos (cloned by setup.sh)
-opencpo-core/
-opencpo-admin/
-opencpo-charge-app/
-opencpo-tester/
-opencpo-charger-farm/
-opencpo-bastion/
 
 # Python
 __pycache__/
@@ -26,3 +19,12 @@ Thumbs.db
 # Install target (created by install.sh)
 opencpo/
 opencpo-new/
+
+# Auto-deploy state and logs (scripts/deploy.sh)
+.deploy/
+deploy.log
+deploy.log.1
+
+# Local server configuration (never commit)
+docker-compose.override.yml
+edge/

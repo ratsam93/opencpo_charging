@@ -1,0 +1,313 @@
+"""
+OpenCPO Bastion — Configuration Management
+
+Loads configuration from /boot/opencpo.yaml (dropped on SD card by user).
+Supports environment variable overrides for all settings.
+Validates on startup with clear error messages.
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+import yaml
+
+logger = logging.getLogger(__name__)
+
+# Config file locations (in priority order)
+CONFIG_PATHS = [
+    Path("/boot/opencpo.yaml"),
+    Path("/boot/firmware/opencpo.yaml"),  # Ubuntu on Pi
+    Path("opencpo.yaml"),                  # Dev/local
+]
+
+
+@dataclass
+class ProxyPorts:
+    ocpp16: int = 9100
+    ocpp201: int = 9201
+
+
+@dataclass
+class HAConfig:
+    """High Availability configuration — dual-gateway VRRP failover."""
+    enabled: str = "auto"          # "auto", "true", "false"
+    role: str = "auto"             # "auto", "primary", "secondary"
+    priority: int = 100            # VRRP priority (higher = preferred active)
+    peer_port: int = 7700          # TCP state replication port
+    heartbeat_port: int = 7701     # UDP health check / discovery port
+    heartbeat_interval: float = 1.0
+    failover_threshold: int = 3    # missed heartbeats before declaring peer dead
+    virtual_ip: str = ""           # VIP on charger LAN — auto-derived if empty
+    interface: str = "eth1"        # charger LAN interface (ETH1 in dual-NIC setup)
+    vrrp_router_id: int = 50       # must match on both units (1-255)
+    sync_interval: float = 5.0    # state replication interval (seconds)
+    encryption_key: str = ""       # auto-generated on first pairing, stored in keyvault
+
+
+@dataclass
+class ConnectivityConfig:
+    """Multi-WAN / 4G failover configuration."""
+    # Nested dicts matching the YAML structure — accessed via .get()
+    primary: Dict[str, Any] = field(default_factory=lambda: {
+        "interface": "eth0",
+        "check_interval": 30,
+        "check_target": "",         # auto: Core API host
+        "failure_threshold": 3,
+    })
+    failover: Dict[str, Any] = field(default_factory=lambda: {
+        "enabled": "auto",          # "auto", "true", "false"
+        "interface": "wwan0",       # or "usb0" for HiLink-mode Huawei
+        "apn": "internet",
+        "pin": "",
+        "bandwidth_mode": True,
+        "max_monthly_gb": 5,
+    })
+    wifi: Dict[str, Any] = field(default_factory=lambda: {
+        "enabled": False,
+        "ssid": "",
+        "password": "",
+    })
+
+    def get(self, key: str, default=None):
+        return getattr(self, key, default)
+
+
+@dataclass
+class GatewayConfig:
+    # Required
+    tailscale_auth_key: str = ""
+    core_api_url: str = ""
+
+    # Network
+    proxy_ports: ProxyPorts = field(default_factory=ProxyPorts)
+    tailscale_hostname: str = ""  # auto-generated if empty
+
+    # Charger-facing listener TLS (mTLS when tls_ca is set)
+    tls_cert: str = ""
+    tls_key: str = ""
+    tls_ca: str = ""
+    # Explicitly allow a non-loopback listener without mTLS (path-only identity)
+    allow_insecure: bool = False
+    # Verify the upstream Core TLS certificate (false only with explicit opt-out)
+    upstream_verify: bool = True
+
+    # Logging
+    log_level: str = "info"
+
+    # Metrics
+    metrics_port: int = 9090
+
+    # Tap
+    tap_port: int = 8085
+    tap_buffer_size: int = 10_000
+
+    # Troubleshoot API
+    troubleshoot_port: int = 8086
+
+    # Auto-update
+    auto_update: bool = True
+    update_time: str = "03:00"  # local time HH:MM
+
+    # PKI / cert renewal
+    cert_renew_days_before: int = 30
+
+    # Discovery
+    discovery_interval_seconds: int = 300  # 5 min
+
+    # Heartbeat
+    heartbeat_interval_seconds: int = 60
+
+    # High Availability
+    ha: HAConfig = field(default_factory=HAConfig)
+
+    # Multi-WAN / 4G failover
+    connectivity: ConnectivityConfig = field(default_factory=ConnectivityConfig)
+
+    @property
+    def core_api_base(self) -> str:
+        return self.core_api_url.rstrip("/")
+
+    def validate(self) -> list[str]:
+        """Return list of validation errors (empty = valid)."""
+        errors = []
+
+        if not self.tailscale_auth_key:
+            errors.append(
+                "Missing 'tailscale_auth_key'. "
+                "Get one from https://login.tailscale.com/admin/settings/keys"
+            )
+
+        if not self.core_api_url:
+            errors.append(
+                "Missing 'core_api_url'. "
+                "Set this to your OpenCPO Core URL, e.g. https://core.example.com"
+            )
+        elif not self.core_api_url.startswith(("http://", "https://")):
+            errors.append(
+                f"Invalid 'core_api_url': {self.core_api_url!r}. "
+                "Must start with http:// or https://"
+            )
+
+        if not (1024 <= self.proxy_ports.ocpp16 <= 65535):
+            errors.append(f"Invalid proxy_ports.ocpp16: {self.proxy_ports.ocpp16}")
+
+        if not (1024 <= self.proxy_ports.ocpp201 <= 65535):
+            errors.append(f"Invalid proxy_ports.ocpp201: {self.proxy_ports.ocpp201}")
+
+        if self.log_level.lower() not in ("debug", "info", "warning", "error", "critical"):
+            errors.append(f"Invalid log_level: {self.log_level!r}")
+
+        return errors
+
+
+def _find_config_file() -> Optional[Path]:
+    """Find the first existing config file from the priority list."""
+    for path in CONFIG_PATHS:
+        if path.exists():
+            logger.debug("Found config at %s", path)
+            return path
+    return None
+
+
+def _apply_env_overrides(config: GatewayConfig) -> None:
+    """Apply OPENCPO_* environment variable overrides."""
+    overrides = {
+        "OPENCPO_TAILSCALE_AUTH_KEY": ("tailscale_auth_key", str),
+        "OPENCPO_CORE_API_URL": ("core_api_url", str),
+        "OPENCPO_LOG_LEVEL": ("log_level", str),
+        "OPENCPO_METRICS_PORT": ("metrics_port", int),
+        "OPENCPO_TAP_PORT": ("tap_port", int),
+        "OPENCPO_TAP_BUFFER_SIZE": ("tap_buffer_size", int),
+        "OPENCPO_TROUBLESHOOT_PORT": ("troubleshoot_port", int),
+        "OPENCPO_AUTO_UPDATE": ("auto_update", lambda v: v.lower() in ("1", "true", "yes")),
+        "OPENCPO_UPDATE_TIME": ("update_time", str),
+        "OPENCPO_HEARTBEAT_INTERVAL": ("heartbeat_interval_seconds", int),
+        "OPENCPO_DISCOVERY_INTERVAL": ("discovery_interval_seconds", int),
+    }
+
+    for env_key, (attr, cast) in overrides.items():
+        value = os.environ.get(env_key)
+        if value is not None:
+            try:
+                setattr(config, attr, cast(value))
+                logger.debug("Config override from env: %s=%r", env_key, value)
+            except (ValueError, TypeError) as e:
+                logger.warning("Invalid env override %s=%r: %s", env_key, value, e)
+
+    # Port overrides
+    ocpp16 = os.environ.get("OPENCPO_PORT_OCPP16")
+    if ocpp16:
+        config.proxy_ports.ocpp16 = int(ocpp16)
+
+    ocpp201 = os.environ.get("OPENCPO_PORT_OCPP201")
+    if ocpp201:
+        config.proxy_ports.ocpp201 = int(ocpp201)
+
+
+def load_config() -> GatewayConfig:
+    """
+    Load configuration from file + env overrides.
+    Raises SystemExit with clear message if required fields are missing.
+    """
+    config = GatewayConfig()
+
+    config_path = _find_config_file()
+    if config_path is None:
+        logger.warning(
+            "No config file found. Checked: %s",
+            ", ".join(str(p) for p in CONFIG_PATHS),
+        )
+        logger.warning("Falling back to environment variables only.")
+    else:
+        try:
+            with open(config_path) as f:
+                raw = yaml.safe_load(f) or {}
+
+            # Required fields
+            config.tailscale_auth_key = raw.get("tailscale_auth_key", "")
+            config.core_api_url = raw.get("core_api_url", "")
+
+            # Optional fields
+            config.log_level = raw.get("log_level", config.log_level)
+            config.metrics_port = raw.get("metrics_port", config.metrics_port)
+            config.tap_port = raw.get("tap_port", config.tap_port)
+            config.tap_buffer_size = raw.get("tap_buffer_size", config.tap_buffer_size)
+            config.troubleshoot_port = raw.get("troubleshoot_port", config.troubleshoot_port)
+            config.auto_update = raw.get("auto_update", config.auto_update)
+            config.update_time = raw.get("update_time", config.update_time)
+            config.tailscale_hostname = raw.get("tailscale_hostname", config.tailscale_hostname)
+            config.heartbeat_interval_seconds = raw.get(
+                "heartbeat_interval_seconds", config.heartbeat_interval_seconds
+            )
+            config.discovery_interval_seconds = raw.get(
+                "discovery_interval_seconds", config.discovery_interval_seconds
+            )
+
+            config.tls_cert = raw.get("tls_cert", config.tls_cert)
+            config.tls_key = raw.get("tls_key", config.tls_key)
+            config.tls_ca = raw.get("tls_ca", config.tls_ca)
+            config.allow_insecure = bool(raw.get("allow_insecure", config.allow_insecure))
+            config.upstream_verify = bool(raw.get("upstream_verify", config.upstream_verify))
+
+            # Proxy ports (nested)
+            if "proxy_ports" in raw and isinstance(raw["proxy_ports"], dict):
+                ports = raw["proxy_ports"]
+                config.proxy_ports.ocpp16 = ports.get("ocpp16", config.proxy_ports.ocpp16)
+                config.proxy_ports.ocpp201 = ports.get("ocpp201", config.proxy_ports.ocpp201)
+
+            # High Availability (nested)
+            if "ha" in raw and isinstance(raw["ha"], dict):
+                ha = raw["ha"]
+                config.ha.enabled = ha.get("enabled", config.ha.enabled)
+                config.ha.role = ha.get("role", config.ha.role)
+                config.ha.priority = ha.get("priority", config.ha.priority)
+                config.ha.peer_port = ha.get("peer_port", config.ha.peer_port)
+                config.ha.heartbeat_port = ha.get("heartbeat_port", config.ha.heartbeat_port)
+                config.ha.heartbeat_interval = ha.get("heartbeat_interval", config.ha.heartbeat_interval)
+                config.ha.failover_threshold = ha.get("failover_threshold", config.ha.failover_threshold)
+                config.ha.virtual_ip = ha.get("virtual_ip", config.ha.virtual_ip)
+                config.ha.interface = ha.get("interface", config.ha.interface)
+                config.ha.vrrp_router_id = ha.get("vrrp_router_id", config.ha.vrrp_router_id)
+                config.ha.sync_interval = ha.get("sync_interval", config.ha.sync_interval)
+                config.ha.encryption_key = ha.get("encryption_key", config.ha.encryption_key)
+
+            # Connectivity / 4G failover (nested)
+            if "connectivity" in raw and isinstance(raw["connectivity"], dict):
+                conn = raw["connectivity"]
+                if "primary" in conn and isinstance(conn["primary"], dict):
+                    config.connectivity.primary.update(conn["primary"])
+                if "failover" in conn and isinstance(conn["failover"], dict):
+                    config.connectivity.failover.update(conn["failover"])
+                if "wifi" in conn and isinstance(conn["wifi"], dict):
+                    config.connectivity.wifi.update(conn["wifi"])
+
+            logger.info("Loaded config from %s", config_path)
+
+        except yaml.YAMLError as e:
+            logger.error("Failed to parse config file %s: %s", config_path, e)
+            raise SystemExit(1) from e
+
+    # Apply environment variable overrides
+    _apply_env_overrides(config)
+
+    # Validate
+    errors = config.validate()
+    if errors:
+        print("\n❌ OpenCPO Bastion configuration errors:\n")
+        for err in errors:
+            print(f"  • {err}")
+        print(
+            f"\nEdit {config_path or 'opencpo.yaml'} to fix these issues.\n"
+            "See config/opencpo.yaml.example for reference.\n"
+        )
+        raise SystemExit(1)
+
+    # Set log level
+    logging.getLogger().setLevel(config.log_level.upper())
+
+    return config
