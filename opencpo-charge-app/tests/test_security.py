@@ -79,14 +79,27 @@ def test_account_owner_allowed_other_account_denied(make_client):
 
 # ── management key / error leaks ─────────────────────────────────────────
 
-def test_management_key_not_sent_on_public_endpoints(make_client, calls):
+def test_management_key_only_on_session_scoped_calls(make_client, calls):
+    """Core needs the key to read/stop a session; the app sends it only after the
+    ownership check, and never on creating a session or other anonymous public calls."""
     c = make_client()
     _create(c)
     c.get("/api/sessions/S-1/poll")
-    public = [x for x in calls if x["path"].startswith("/api/v1/public/")]
-    assert public and all(x["x_api_key"] is None for x in public)
+    create = [x for x in calls if x["method"] == "POST" and x["path"] == "/api/v1/public/sessions"]
+    assert create and all(x["x_api_key"] is None for x in create)
+    scoped = [x for x in calls if x["path"].startswith("/api/v1/public/sessions/S-1")]
+    assert scoped and all(x["x_api_key"] == "mgmt-test-key" for x in scoped)
     internal = [x for x in calls if x["path"].startswith("/api/v1/chargers/")]
     assert internal and all(x["x_api_key"] == "mgmt-test-key" for x in internal)
+
+
+def test_pdf_download_sends_the_key(make_client, calls):
+    c = make_client()
+    _create(c)
+    calls.clear()
+    c.get("/api/sessions/S-1/pdf", follow_redirects=False)
+    pdf = [x for x in calls if x["path"].endswith("/pdf")]
+    assert pdf and pdf[0]["x_api_key"] == "mgmt-test-key"
 
 
 def test_core_errors_do_not_leak(make_client, state):

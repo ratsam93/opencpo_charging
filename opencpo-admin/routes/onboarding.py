@@ -6,7 +6,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
-from shared import api, templates, CORE_API, PKI_DATA_DIR, logger
+from shared import api, templates, CORE_API, CORE_API_KEY, PKI_DATA_DIR, logger
 
 router = APIRouter()
 
@@ -75,7 +75,9 @@ async def download_my_cert(request: Request):
     cert_format, file_ext_hint = _os_map.get(os_type, ("modern", "p12"))
 
     try:
-        async with httpx.AsyncClient(base_url=CORE_API, timeout=30) as client:
+        async with httpx.AsyncClient(
+                base_url=CORE_API, timeout=30,
+                headers={"X-API-Key": CORE_API_KEY} if CORE_API_KEY else {}) as client:
             r = await client.post("/api/v1/pki/issue/user", json={
                 "name": email.split("@")[0].replace(".", " ").title(),
                 "email": email,

@@ -21,6 +21,12 @@ CALLS: list[dict] = []
 STATE = {"fail": False, "duplicate_of_other": None}
 
 
+def _need_key(request: Request):
+    """Real core: GET/stop/cancel/pdf of a session need the management key."""
+    if request.headers.get("x-api-key") != "mgmt-test-key":
+        raise HTTPException(401, "Invalid or missing API key")
+
+
 def _log(request: Request):
     CALLS.append({"method": request.method, "path": request.url.path,
                   "x_api_key": request.headers.get("x-api-key"),
@@ -56,6 +62,7 @@ async def pending(request: Request):
 @mock_core.get("/api/v1/public/sessions/{sid}")
 async def get_session(sid: str, request: Request):
     _log(request)
+    _need_key(request)
     if STATE["fail"]:
         raise HTTPException(500, "SECRET-TRACE /srv/core/api.py:99")
     return {"id": sid, "driver_id": "drv-1", "phone": "+31600000000", "amount": "12.30"}
@@ -64,18 +71,21 @@ async def get_session(sid: str, request: Request):
 @mock_core.post("/api/v1/public/sessions/{sid}/stop")
 async def stop(sid: str, request: Request):
     _log(request)
+    _need_key(request)
     return {"ok": True, "stopped": sid}
 
 
 @mock_core.post("/api/v1/public/sessions/{sid}/cancel")
 async def cancel(sid: str, request: Request):
     _log(request)
+    _need_key(request)
     return {"ok": True, "cancelled": sid}
 
 
 @mock_core.get("/api/v1/public/sessions/{sid}/pdf")
 async def pdf(sid: str, request: Request):
     _log(request)
+    _need_key(request)
     return {"pdf": sid}
 
 

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, Response, RedirectResponse
 
 import config
-from core.api import api_get
+from core.api import api_get, _auth_headers
 from core.security import authorize_session, forbidden, safe_error
 
 router = APIRouter()
@@ -41,8 +41,9 @@ async def download_pdf(request: Request, session_id: str):
     allowed, _ = await authorize_session(request, session_id)
     if not allowed:
         return forbidden()
-    async with httpx.AsyncClient(base_url=config.CORE_API, timeout=30) as client:
-        r = await client.get(f"/api/v1/public/sessions/{session_id}/pdf")
+    pdf_path = f"/api/v1/public/sessions/{session_id}/pdf"
+    async with httpx.AsyncClient(base_url=config.CORE_API, timeout=30, headers=_auth_headers(pdf_path)) as client:
+        r = await client.get(pdf_path)
         if not r.is_success:
             return RedirectResponse(f"/receipt/{session_id}", status_code=302)
         return Response(

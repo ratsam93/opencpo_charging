@@ -10,9 +10,15 @@ import httpx
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from shared import templates, CORE_API, get_setup_status
+from shared import templates, CORE_API, CORE_API_KEY, get_setup_status
 
 logger = logging.getLogger(__name__)
+
+
+def _core_headers() -> dict:
+    """Core requires the management key for setup writes (server-to-server)."""
+    return {"X-API-Key": CORE_API_KEY} if CORE_API_KEY else {}
+
 
 router = APIRouter()
 
@@ -203,7 +209,7 @@ async def setup_step(request: Request, step_name: str):
         }
     error = None
     try:
-        async with httpx.AsyncClient(base_url=CORE_API, timeout=10) as client:
+        async with httpx.AsyncClient(base_url=CORE_API, timeout=10, headers=_core_headers()) as client:
             r = await client.post(api_path, json=payload)
             if r.status_code != 200:
                 data = r.json()
@@ -246,7 +252,7 @@ async def setup_step(request: Request, step_name: str):
 async def skip_step(request: Request, step_name: str):
     """Skip a setup step."""
     try:
-        async with httpx.AsyncClient(base_url=CORE_API, timeout=10) as client:
+        async with httpx.AsyncClient(base_url=CORE_API, timeout=10, headers=_core_headers()) as client:
             await client.post(f"/api/v1/admin/setup/skip/{step_name}")
     except Exception:
         pass

@@ -13,16 +13,20 @@ CORE_API_KEY = os.getenv("MANAGEMENT_API_KEY", "")
 
 
 PUBLIC_PREFIX = "/api/v1/public/"
+# Reading, stopping or cancelling a session needs the management key on Core. This app
+# only makes those calls AFTER core/security.py has checked that the caller owns the
+# session. Creating a session and the other public routes stay anonymous: the key is
+# never attached to them.
+SESSION_SCOPED_PREFIX = "/api/v1/public/sessions/"
+_ANONYMOUS_SESSION_PATHS = ("/api/v1/public/sessions/pending",)
 
 
 def _auth_headers(path: str = "") -> dict:
-    """X-API-Key for server-to-server management calls.
-
-    The management key is NOT sent on /api/v1/public/* endpoints: those are
-    reached on behalf of anonymous visitors and must not carry privileges.
-    """
+    """X-API-Key for server-to-server calls that Core protects with the management key."""
     if path.startswith(PUBLIC_PREFIX):
-        return {}
+        scoped = path.startswith(SESSION_SCOPED_PREFIX) and not path.startswith(_ANONYMOUS_SESSION_PATHS)
+        if not scoped:
+            return {}
     return {"X-API-Key": CORE_API_KEY} if CORE_API_KEY else {}
 
 
